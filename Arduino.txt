@@ -1,0 +1,190 @@
+﻿#define ag_ismi "" //Kendinize göre giriniz.
+#define ag_sifresi "" //Kendinize göre giriniz.
+#define IP ""    //thingspeak.com IP adresi
+ 
+int resval1 = 0; 
+int resval2 = 0;
+int resval3 = 0;// holds the value
+
+int respin1 = A0; // sensor pin used
+int respin2 = A1;
+int respin3 = A2;
+
+
+int tampon1 = 0;
+int tampon2 = 0;
+int tampon3 = 0;
+//1 kuru - 2 ıslak
+int pompadurumu = 1;
+void setup() { 
+
+ pinMode(8,OUTPUT);
+ pinMode(9,OUTPUT);
+ pinMode(10,OUTPUT);
+ pinMode(11,OUTPUT);
+
+ digitalWrite(8,LOW);
+ digitalWrite(9,LOW);
+ digitalWrite(10,LOW);
+ digitalWrite(11,LOW);
+    
+
+  
+  Serial.begin(115200); //Seriport'u açıyoruz. Güncellediğimiz 
+                        //ESP modülünün baudRate değeri 115200 olduğu için bizde Seriport'u 115200 şeklinde seçiyoruz
+  
+  Serial.println("AT"); //ESP modülümüz ile bağlantı kurulup kurulmadığını kontrol ediyoruz.
+  
+  delay(3000); //ESP ile iletişim için 3 saniye bekliyoruz.
+ analogReference(INTERNAL);
+  if(Serial.find("OK")){         //esp modülü ile bağlantıyı kurabilmişsek modül "AT" komutuna "OK" komutu ile geri dönüş yapıyor.
+     Serial.println("AT+CWMODE=1"); //esp modülümüzün WiFi modunu STA şekline getiriyoruz. Bu mod ile modülümüz başka ağlara bağlanabilecek.
+     delay(1000);
+     String baglantiKomutu=String("AT+CWJAP=\"")+ag_ismi+"\",\""+ag_sifresi+"\"";
+    Serial.println(baglantiKomutu);
+    
+     delay(2000);
+ }
+} 
+  
+void loop()  {
+
+
+  resval1 = analogRead(respin1);
+  if(resval1>800){
+    tampon1=2;
+  }else{
+    tampon1=1;
+  }
+
+   resval2 = analogRead(respin2);
+  if(resval2>800){
+    tampon2=2;
+  }else{
+    tampon2=1;
+  }
+
+  resval3 = analogRead(respin3);
+  if(resval3>800){
+    tampon3=2;
+  }else{
+    tampon3=1;
+  }
+
+  
+  Serial.print("resval1=");
+  Serial.print(tampon1);
+    Serial.println("");
+  Serial.print("resval2=");
+  Serial.print(tampon2);
+    Serial.println("");
+  Serial.print("resval3=");
+  Serial.print(tampon3);
+    Serial.println("");
+
+ 
+
+  sicaklik_yolla(tampon1,tampon2,tampon3);
+  if((tampon1+tampon2+tampon3)>=5){
+    if( pompadurumu == 1){
+          stepmotor(100,1);
+          pompadurumu = 2;
+    }
+
+  }else{
+    if(pompadurumu == 2){
+      stepmotor(100,2);
+      pompadurumu = 1;
+    }
+  }
+  delay(1000);  
+
+}
+   
+ 
+ void sicaklik_yolla(int resval, int resval2, int resval3){
+ Serial.println(String("AT+CIPSTART=\"TCP\",\"") + IP + "\",80");  //thingspeak sunucusuna bağlanmak için bu kodu kullanıyoruz. 
+                                                                   //AT+CIPSTART komutu ile sunucuya bağlanmak için sunucudan izin istiyoruz. 
+                                                                   //TCP burada yapacağımız bağlantı çeşidini gösteriyor. 80 ise bağlanacağımız portu gösteriyor
+ delay(2000);
+  if(Serial.find("Error")){     //sunucuya bağlanamazsak ESP modülü bize "Error" komutu ile dönüyor.
+   Serial.println("AT+CIPSTART Error");
+    return;
+  }
+   
+  String getStr = "GET https://api.thingspeak.com/update?api_key=GAK55A38EEG00RFF";
+  getStr +="&field1=";
+  getStr += String(tampon1);
+  getStr +="&field2=";
+  getStr += String(tampon2);
+  getStr +="&field3=";
+  getStr += String(tampon3);
+  getStr += "\r\n\r\n";                                         // ESP modülümüz ile seri iletişim kurarken yazdığımız komutların modüle iletilebilmesi için Enter komutu yani
+  delay(3000);                                                                                // /r/n komutu kullanmamız gerekiyor.
+ 
+ Serial.print("AT+CIPSEND=");                    //veri yollayacağımız zaman bu komutu kullanıyoruz. Bu komut ile önce kaç tane karakter yollayacağımızı söylememiz gerekiyor.
+ Serial.println(getStr.length()+2);       //yollanacakkomut değişkeninin kaç karakterden oluştuğunu .length() ile bulup yazırıyoruz.
+
+                                              // arduino da ">" işaretini gördüğü anda sıcaklık verisini esp modülü ile thingspeak sunucusuna yolluyor.
+
+
+ delay(5000);
+        
+ if(Serial.find(">"))
+ {                           //eğer sunucu ile iletişim sağlayıp komut uzunluğunu gönderebilmişsek ESP modülü bize ">" işareti ile geri dönüyor.                                                                          
+ Serial.print(getStr);
+ Serial.print("\r\n\r\n");
+ }
+ else{
+   Serial.println("AT+CIPCLOSE");
+ }
+
+
+ 
+
+ }
+
+
+ void stepmotor(int adim,int yon){
+if(yon==1){
+  for(int x=0;x<adim;x++){
+  digitalWrite(8,HIGH);
+  delay(10);
+  digitalWrite(8,LOW);
+
+  digitalWrite(9,HIGH);
+  delay(10);
+  digitalWrite(9,LOW);
+
+  digitalWrite(10,HIGH);
+  delay(10);
+  digitalWrite(10,LOW);
+
+  digitalWrite(11,HIGH);
+  delay(10);
+  digitalWrite(11,LOW);
+}
+
+}else{
+   for(int x=0;x<adim;x++){
+  digitalWrite(11,HIGH);
+  delay(10);
+  digitalWrite(11,LOW);
+
+  digitalWrite(10,HIGH);
+  delay(10);
+  digitalWrite(10,LOW);
+
+  digitalWrite(9,HIGH);
+  delay(10);
+  digitalWrite(9,LOW);
+
+  digitalWrite(8,HIGH);
+  delay(10);
+  digitalWrite(8,LOW);
+}
+}
+
+
+ }
+ 
